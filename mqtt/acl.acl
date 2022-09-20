@@ -1,0 +1,21 @@
+
+#admin user
+user admin
+topic readwrite #
+
+
+#low user
+user jerome
+topic read car1/camera
+topic read car2/camera
+topic read car3/camera
+
+user jerome
+topic read car1/telm
+topic read car2/telm
+topic read car3/telm
+
+#patterns
+pattern readwrite car1/ctrl/%c
+pattern readwrite car2/ctrl/%c
+pattern readwrite car3/ctrl/%c
