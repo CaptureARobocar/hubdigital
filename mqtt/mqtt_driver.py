@@ -4,6 +4,7 @@ from base64 import b64decode
 from json import dumps, loads
 from typing import Optional, Union, Callable, Final
 
+import numpy as np
 import pygame
 from cv2 import imdecode, resize, imshow, waitKey, putText, IMREAD_COLOR, FONT_HERSHEY_COMPLEX_SMALL
 from numpy import ndarray, frombuffer, uint8
@@ -56,6 +57,7 @@ _PILOT_MODE_JSON_VALUE: Final[str] = 'pilot'
 _RECORD_MODE_JSON_KEY: Final[str] = 'recording'
 
 # IMAGE CONSTANTS
+_IMG_NAME: str = 'vehicle_cam'
 _MARGIN_LEFT: int = 10
 
 
@@ -89,6 +91,7 @@ class DkMqttDriver:
         assert 0 < throttle_precision <= 1, "throttle_precision must be between 0 and 1 (included)"
         assert 0 < angle_precision <= 1, "angle_precision must be between 0 and 1 (included)"
         self._frame_size: tuple[int, int] = frame_size
+        self._display_loading_image(pending_topic=video_topic)
         self._mqtt_client: Client = Client()
         if username is not None:
             self._mqtt_client.username_pw_set(username, password)
@@ -114,7 +117,7 @@ class DkMqttDriver:
         img_array = imdecode(img_array, IMREAD_COLOR)
         img_array = resize(img_array, self._frame_size)
         img_array = self._insert_driving_data(img_array)
-        imshow('vehicle_cam', img_array)
+        imshow(_IMG_NAME, img_array)
         ctrl_key: chr = chr(waitKey(1) & 0xFF)
         self._run_ctrl(ctrl_key)
 
@@ -279,6 +282,20 @@ class DkMqttDriver:
                 finally:
                     joystick.quit()
 
+    def _display_loading_image(self, pending_topic, color=(0, 100, 0)) -> None:
+        loading_img: ndarray = np.zeros((self._frame_size[1], self._frame_size[0], 3))
+        margin_top: int = 0
+
+        def _add_loading_message(msg: str) -> None:
+            nonlocal loading_img
+            nonlocal margin_top
+            margin_top += 30
+            loading_img = _put_text(loading_img, msg, org=(_MARGIN_LEFT, margin_top), color=color, thickness=1)
+
+        _add_loading_message("LOADING...")
+        _add_loading_message(f"Waiting for MQTT messages from '{pending_topic}' topic")
+        imshow(_IMG_NAME, loading_img)
+
 
 if __name__ == '__main__':
     DkMqttDriver(
@@ -286,5 +303,5 @@ if __name__ == '__main__':
         ctrl_topic='',
         username='',
         password='',
-        host='mqtt.diyrobocars.fr',
+        host:'mqtt.diyrobocars.fr',
     )
