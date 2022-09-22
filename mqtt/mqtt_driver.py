@@ -295,6 +295,7 @@ class DkMqttDriver:
         _add_loading_message("LOADING...")
         _add_loading_message(f"Waiting for MQTT messages from '{pending_topic}' topic")
         imshow(_IMG_NAME, loading_img)
+        waitKey(1) & 0xFF
 
 
 if __name__ == '__main__':
@@ -302,6 +303,6 @@ if __name__ == '__main__':
         video_topic='',
         ctrl_topic='',
         username='',
-        password='',
-        host:'mqtt.diyrobocars.fr',
+        password=b'',
+        host='mqtt.diyrobocars.fr'
     )
