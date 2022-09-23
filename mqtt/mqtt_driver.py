@@ -9,6 +9,7 @@ import pygame
 from cv2 import imdecode, resize, imshow, waitKey, putText, IMREAD_COLOR, FONT_HERSHEY_COMPLEX_SMALL
 from numpy import ndarray, frombuffer, uint8
 from paho.mqtt.client import Client
+from pygame.joystick import Joystick
 
 # DEFINE SPECIAL KEYS
 _TOP_ARROW_CHR: Final[chr] = chr(0)
@@ -148,8 +149,10 @@ class DkMqttDriver:
         self._ctrl_data[_MODE_JSON_KEY] = _USER_MODE_JSON_VALUE
 
     def exit(self) -> None:
-        self._mqtt_client.loop_stop()
-        self._quit_joysticks()
+        try:
+            self._mqtt_client.loop_stop()
+        finally:
+            self._quit_joysticks()
         exit()
 
     def toggle_help(self) -> None:
@@ -196,11 +199,11 @@ class DkMqttDriver:
 
         _add_help_message("Press 'h' to return on driving screen")
         _add_help_message("Press 'ESC' to exit the program")
-        _add_help_message("Press 'z' or 'top arrow' to increase throttle")
-        _add_help_message("Press 's' or 'bottom arrow' to decrease throttle")
+        _add_help_message("Press 'z' to increase throttle")
+        _add_help_message("Press 's' to decrease throttle")
         _add_help_message("Press 'SPACE' to reset throttle to zero")
-        _add_help_message("Press 'd' or 'right arrow' to increase angle to right side")
-        _add_help_message("Press 'q' or 'left arrow' to increase angle to left side")
+        _add_help_message("Press 'd' to increase angle to right side")
+        _add_help_message("Press 'q' to increase angle to left side")
         _add_help_message("Press 'TAB' to reset angle to zero")
         _add_help_message("Press 'p' to start autopilot mode")
         _add_help_message("Press 'u' to start user mode")
@@ -246,41 +249,44 @@ class DkMqttDriver:
     def _init_joysticks(self) -> None:
         pygame.init()
         pygame.joystick.init()
-        self._joystick_count: int = pygame.joystick.get_count()
         self._previous_joystick_idx: int = 0
         self._previous_joystick_cmd: tuple[float, float] = (0., 0.)
         self._enable_joystick: bool = True
+        self._joystick_list: list[Joystick] = []
+        for i in range(pygame.joystick.get_count()):
+            joystick: Joystick = Joystick(i)
+            joystick.init()
+            self._joystick_list.append(joystick)
 
-    @staticmethod
-    def _quit_joysticks() -> None:
-        pygame.joystick.quit()
-        pygame.quit()
+    def _quit_joysticks(self) -> None:
+        try:
+            for joystick in self._joystick_list:
+                joystick.quit()
+        finally:
+            try:
+                pygame.joystick.quit()
+            finally:
+                pygame.quit()
 
     def _joystick_driving(self, joystick_precision: int = 3) -> None:
-        if self._enable_joystick is True and self._joystick_count > 0:
+        if self._enable_joystick is True and self._joystick_list:
             pygame.event.get()
-            for i in range(self._joystick_count):
-                joystick = pygame.joystick.Joystick(i)
-                joystick.init()
-                try:
-                    joystick_cmd: tuple[float, float] = (
-                        round(joystick.get_axis(0), joystick_precision),
-                        -round(joystick.get_axis(1), joystick_precision)
-                    )
-                    # Allows secondary joysticks or keyboard to take control when first detected joysticks are not used
-                    if (
-                            (i == self._previous_joystick_idx and self._previous_joystick_cmd != joystick_cmd)
-                            or
-                            (i != self._previous_joystick_idx and joystick_cmd != (0., 0.))
-                    ):
-                        self._ctrl_data[_ANGLE_JSON_KEY] = joystick_cmd[0]
-                        self._ctrl_data[_THROTTLE_JSON_KEY] = joystick_cmd[1]
-                        self._previous_joystick_cmd = joystick_cmd
-                        self._previous_joystick_idx = i
-                        return
-
-                finally:
-                    joystick.quit()
+            for i, joystick in enumerate(self._joystick_list):
+                joystick_cmd: tuple[float, float] = (
+                    round(joystick.get_axis(0), joystick_precision),
+                    -round(joystick.get_axis(1), joystick_precision)
+                )
+                # Allows secondary joysticks or keyboard to take control when first detected joysticks are not used
+                if (
+                        (i == self._previous_joystick_idx and self._previous_joystick_cmd != joystick_cmd)
+                        or
+                        (i != self._previous_joystick_idx and joystick_cmd != (0., 0.))
+                ):
+                    self._ctrl_data[_ANGLE_JSON_KEY] = joystick_cmd[0]
+                    self._ctrl_data[_THROTTLE_JSON_KEY] = joystick_cmd[1]
+                    self._previous_joystick_cmd = joystick_cmd
+                    self._previous_joystick_idx = i
+                    return
 
     def _display_loading_image(self, pending_topic, color=(0, 100, 0)) -> None:
         loading_img: ndarray = np.zeros((self._frame_size[1], self._frame_size[0], 3))
